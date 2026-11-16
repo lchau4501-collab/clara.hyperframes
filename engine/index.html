@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: #0b0b10; }
+      #root { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: sans-serif; padding: 0 160px; }
+      #title { color: #ffffff; font-size: 84px; font-weight: 700; letter-spacing: -0.03em; text-align: center; }
+      #subtitle { color: #b8b8c8; font-size: 40px; font-weight: 400; margin-top: 28px; text-align: center; }
+      .line { color: #e8e8f0; font-size: 44px; font-weight: 500; margin-top: 22px; text-align: center; opacity: 0; }
+      .line .hl { visibility: hidden; color: #ffd60a; }
+      #bar { position: absolute; top: 0; left: 0; height: 10px; width: 0%; background: #ffd60a; }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="12"
+      data-width="1920"
+      data-height="1080"
+      data-composition-variables='[{"id": "title", "type": "string", "label": "Title", "default": "Brief title"}, {"id": "subtitle", "type": "string", "label": "Subtitle", "default": ""}, {"id": "lines", "type": "string", "label": "Script lines separated by pipe", "default": "First point | Second point"}, {"id": "duration", "type": "number", "label": "Duration seconds", "default": 12}, {"id": "accent", "type": "color", "label": "Accent color", "default": "#ffd60a"}]' 
+    >
+      <div id="bar"></div>
+      <div id="card" class="clip" data-start="0" data-duration="12" data-track-index="0">
+        <h1 id="title">Brief title</h1>
+      <p id="subtitle"></p>
+      <div id="lines"></div>
+      </div>
+    </div>
+    <script>
+      const vars = window.__hyperframes.getVariables();
+      const root = document.getElementById('root');
+      const dur = Math.max(1, Number(vars.duration) || 12);
+      root.dataset.duration = String(dur);
+      document.getElementById('card').dataset.duration = String(dur);
+      document.getElementById('title').textContent = String(vars.title || '');
+      const sub = document.getElementById('subtitle');
+      sub.textContent = String(vars.subtitle || '');
+      sub.style.display = vars.subtitle ? '' : 'none';
+      document.getElementById('bar').style.background = String(vars.accent || '#ffd60a');
+      const linesWrap = document.getElementById('lines');
+      const lines = String(vars.lines || '').split(/[|]|\r?\n/).map(s => s.trim()).filter(Boolean).slice(0, 6);
+      lines.forEach((t, i) => {
+        const el = document.createElement('p');
+        el.className = 'line';
+        el.dataset.start = '0';
+        el.dataset.duration = String(dur);
+                el.textContent = String(t);
+        linesWrap.appendChild(el);
+      });
+      const tl = gsap.timeline({ paused: true });
+      tl.fromTo('#title', { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.8, ease: 'power3.out' }, 0.2);
+      if (vars.subtitle) tl.fromTo('#subtitle', { opacity: 0 }, { opacity: 1, duration: 0.6 }, 0.9);
+      lines.forEach((t, i) => {
+        tl.to(linesWrap.children[i], { opacity: 1, duration: 0.5, ease: 'power2.out' }, 1.4 + i * 0.7);
+      });
+      tl.fromTo('#bar', { width: '0%' }, { width: '100%', duration: dur, ease: 'none' }, 0);
+      window.__timelines['main'] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

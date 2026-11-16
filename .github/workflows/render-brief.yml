@@ -1,0 +1,115 @@
+name: Render brief video
+
+# Renders a short MP4 from a text brief using the HyperFrames engine.
+# The brief inputs below are turned into composition variables and rendered
+# from engine/index.html. Run it from the Actions tab (workflow_dispatch).
+
+on:
+  workflow_dispatch:
+    inputs:
+      title:
+        description: Video title
+        required: true
+        type: string
+      subtitle:
+        description: Optional subtitle
+        required: false
+        default: ""
+        type: string
+      lines:
+        description: Script lines, separated by |
+        required: false
+        default: ""
+        type: string
+      duration:
+        description: Video length in seconds (max 30)
+        required: false
+        default: "8"
+        type: string
+      quality:
+        description: Render quality
+        required: false
+        default: draft
+        type: choice
+        options: [draft, looks]
+      fps:
+        description: Frames per second
+        required: false
+        default: "24"
+        type: choice
+        options: ["24", "30"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: render-brief
+  cancel-in-progress: false
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      HYPERFRAMES_NO_UPDATE_CHECK: "1"
+      IN_TITLE: ${{ inputs.title }}
+      IN_SUBTITLE: ${{ inputs.subtitle }}
+      IN_LINES: ${{ inputs.lines }}
+      IN_DURATION: ${{ inputs.duration }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Build variables from brief
+        run: |
+          node -e '
+            const fs = require("fs");
+            const dur = Math.min(30, Math.max(1, parseInt(process.env.IN_DURATION, 10) || 8));
+            const vars = {
+              title: process.env.IN_TITLE || "Untitled",
+              subtitle: process.env.IN_SUBTITLE || "",
+              lines: process.env.IN_LINES || "",
+              duration: dur,
+              accent: "#ffd60a"
+            };
+            fs.writeFileSync("vars.json", JSON.stringify(vars));
+            fs.writeFileSync("/tmp/duration.txt", String(dur));
+          '
+
+      - name: Lint composition
+        run: npx --yes hyperframes@0.9.56 lint engine
+
+      - name: Render video
+        run: |
+          START=$(date +%s)
+          npx --yes hyperframes@0.9.56 render engine \
+            --quality "${{ inputs.quality }}" \
+            --fps "${{ inputs.fps }}" \
+            --end "$(cat /tmp/duration.txt)" \
+            --variables-file vars.json \
+            --output dist/brief.mp4
+          END=$(date +%s)
+          echo "render_wall_seconds=$((END-START))" >> "$GITHUB_ENV"
+
+      - name: Probe output
+        run: |
+          DUR=$(ffprobe -v error -show_entries format=duration -of csv=p=0 dist/brief.mp4)
+          SIZE=$(stat -c%s dist/brief.mp4)
+          {
+            echo "### Render result"
+            echo "- Engine: hyperframes@0.9.56 (npm, Apache-2.0)"
+            echo "- Video duration: ${DUR}s, size: ${SIZE} bytes"
+            echo "- Render wall time (render step): ${render_wall_seconds}s"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: brief-video
+          path: dist/brief.mp4
+          retention-days: 30
